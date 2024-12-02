@@ -54,6 +54,8 @@ class Q_agent:
 
     # Save the q_values dictionary as a byte stream using pickle
     def save_policy(self, filename):
+        if not filename.endswith(".pkl"):
+            filename += ".pkl"  # Add '.pkl' if not already present
         with open(filename, 'wb') as f:
             pickle.dump(self.q_values, f)
 
