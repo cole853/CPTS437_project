@@ -1,4 +1,4 @@
-# THIS FILE INCLUDES CODE FROM COSTA HUANG'S PPO TUTORIAL https://github.com/vwxyzjn/ppo-implementation-details/blob/main/ppo.py
+# THIS FILE IS MODIFIED FROM COSTA HUANG'S PPO TUTORIAL https://github.com/vwxyzjn/ppo-implementation-details/blob/main/ppo.py
 
 import os
 import random
@@ -8,15 +8,16 @@ import torch.nn as nn
 import torch.optim as optim
 import gymnasium as gym
 import time
-from torch.utils.tensorboard import SummaryWriter
 from PPO_agent import Agent
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
 # a wrapper for training the PPO agent
 class PPO_trainer:
     def __init__(self, gym_id, steps, learning_rate=2.5e-4):
         self.gym_id = gym_id
-        self.exp_name = os.path.basename(__file__).rstrip(".py")
+        self.exp_name = "PPO"
         self.seed = 1
         self.torch_deterministic = True
         self.learning_rate = learning_rate
@@ -57,6 +58,14 @@ class PPO_trainer:
         # close environment after getting observation and action spaces
         env.close()
 
+        # track the progress of training
+        self.lrs = []
+        self.ep_rewards = []
+        self.steps_per_ep = []
+        self.value_losses = []
+        self.policy_losses = []
+        self.entropy_values = []
+
     def run(self):
         # make environment
         run_name = f"{self.gym_id}__{self.exp_name}__{self.seed}__{int(time.time())}"
@@ -65,13 +74,6 @@ class PPO_trainer:
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         env.reset(seed=self.seed)
-
-        # make summary writer
-        writer = SummaryWriter(f"runs/{run_name}")
-        writer.add_text(
-            "hyperparameters",
-            "|param|value|\n|-|-|\n%s" % "\n",
-        )
 
         # make agent and optimizer
         agent = Agent(env)
@@ -89,7 +91,7 @@ class PPO_trainer:
             self.updateLR(update, optimizer)
 
             # run a simulation and collect the information needed to update the model
-            next_obs, next_done = self.simulate_steps(env, agent, writer, next_obs, next_done)
+            next_obs, next_done = self.simulate_steps(env, agent, next_obs, next_done)
 
             # compute the advantages to update the model
             advantages, returns = self.compute_gae(agent, next_obs, next_done)
@@ -113,23 +115,17 @@ class PPO_trainer:
                     # optimize the agent based on the minibatch
                     pg_loss, v_loss, entropy_loss = self.optimize_minibatch(agent, optimizer, mb_inds)
 
-            y_pred, y_true = self.b_values.cpu().numpy(), self.b_returns.cpu().numpy()
-            var_y = np.var(y_true)
-            explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-
             # record information to show the effect of training
-            writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], self.global_step)
-            writer.add_scalar("losses/value_loss", v_loss.item(), self.global_step)
-            writer.add_scalar("losses/policy_loss", pg_loss.item(), self.global_step)
-            writer.add_scalar("losses/entropy", entropy_loss.item(), self.global_step)
-            writer.add_scalar("losses/explained_variance", explained_var, self.global_step)
+            self.lrs.append(optimizer.param_groups[0]["lr"])
+            self.value_losses.append(v_loss.item())
+            self.policy_losses.append(pg_loss.item())
+            self.entropy_values.append(entropy_loss.item())
             print("Samples per second:", int(self.global_step / (time.time() - start_time)))
-            writer.add_scalar("charts/samples_per_second", int(self.global_step / (time.time() - start_time)), self.global_step)
 
-        # save model, close environment, and close summarywriter
-        torch.save(agent.state_dict(), f"runs/{run_name}")
+        # save model, close environment, and save plots
+        torch.save(agent.state_dict(), f"agents/{run_name}.pkl")
+        self.save_plots(run_name)
         env.close()
-        writer.close()
 
     # changes the learning rate to learn less as the agent goes through training
     def updateLR(self, update, optimizer):
@@ -139,7 +135,7 @@ class PPO_trainer:
         optimizer.param_groups[0]["lr"] = lrnow
 
     # runs steps in the environment and collects data to update the model
-    def simulate_steps(self, env, agent, writer, next_obs, next_done):
+    def simulate_steps(self, env, agent, next_obs, next_done):
         for step in range(self.num_steps):
             self.global_step += 1
             next_obs = torch.tensor(next_obs, dtype=torch.float32) if not isinstance(next_obs,
@@ -165,8 +161,8 @@ class PPO_trainer:
             # Handle end of episode
             if terminated or truncated:
                 print(f"global_step={self.global_step}, episodic_return={info['episode']['r']}")
-                writer.add_scalar("charts/episodic_return", info["episode"]["r"], self.global_step)
-                writer.add_scalar("charts/episodic_length", info["episode"]["l"], self.global_step)
+                self.ep_rewards.append(info['episode']['r'])
+                self.steps_per_ep.append(info['episode']['l'])
                 next_obs, info = env.reset()
                 next_done = torch.tensor(1.0, dtype=torch.float32)  # Mark as done
         return next_obs, next_done
@@ -235,3 +231,84 @@ class PPO_trainer:
         optimizer.step()
 
         return pg_loss, v_loss, entropy_loss
+
+    def save_plots(self, run_name):
+        # make directory to store plots
+        os.makedirs("plots", exist_ok=True)
+        plot_dir = os.path.join("plots", run_name)
+        os.makedirs(plot_dir, exist_ok=True)
+
+        # Plot for Episode Rewards
+        smoothed_rewards = pd.Series(self.ep_rewards).rolling(window=500, center=True).mean()
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.ep_rewards, label="Episode Rewards", marker="o")
+        plt.plot(smoothed_rewards, label="Smoothed rewards (Moving Average 500)", linestyle="--")
+        plt.title("Episode Rewards Over Time")
+        plt.xlabel("Episode")
+        plt.ylabel("Reward")
+        plt.legend()
+        plt.grid()
+        plt.savefig(os.path.join(plot_dir, "ep_rewards.png"), dpi=300)
+        plt.clf()
+
+        # Plot for Steps per Episode
+        smoothed_steps = pd.Series(self.steps_per_ep).rolling(window=500, center=True).mean()
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.steps_per_ep, label="Steps per Episode", marker="o")
+        plt.plot(smoothed_steps, label="Smoothed Steps per Episode (Moving Average 500)", linestyle="--")
+        plt.title("Steps per Episode Over Time")
+        plt.xlabel("Episode")
+        plt.ylabel("Steps")
+        plt.legend()
+        plt.grid()
+        plt.savefig(os.path.join(plot_dir, "steps_per_ep.png"), dpi=300)
+        plt.clf()
+
+        # Plot for Learning Rate
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.lrs, label="Learning Rate per Episode", marker="o")
+        plt.title("Learning Rate Over Time")
+        plt.xlabel("Episode")
+        plt.ylabel("Learning Rate")
+        plt.legend()
+        plt.grid()
+        plt.savefig(os.path.join(plot_dir, "learning_rate.png"), dpi=300)
+        plt.clf()
+
+        # Plot for Value Losses
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.value_losses, label="Value Losses", marker="o")
+        plt.title("Value Loss Over Time")
+        plt.xlabel("Episode")
+        plt.ylabel("Value Loss")
+        plt.legend()
+        plt.grid()
+        plt.savefig(os.path.join(plot_dir, "value_loss.png"), dpi=300)
+        plt.clf()
+
+        # Plot for Policy Losses
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.policy_losses, label="Policy Losses", marker="o")
+        plt.title("Policy Loss Over Time")
+        plt.xlabel("Episode")
+        plt.ylabel("Policy Loss")
+        plt.legend()
+        plt.grid()
+        plt.savefig(os.path.join(plot_dir, "policy_loss.png"), dpi=300)
+        plt.clf()
+
+        # Plot for Entropy
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.entropy_values, label="Entropy", marker="o")
+        plt.title("Entropy Over Time")
+        plt.xlabel("Episode")
+        plt.ylabel("Entropy")
+        plt.legend()
+        plt.grid()
+        plt.savefig(os.path.join(plot_dir, "entropy.png"), dpi=300)
+        plt.clf()
+
+        print(f"Plots saved in the directory: {plot_dir}")
+
