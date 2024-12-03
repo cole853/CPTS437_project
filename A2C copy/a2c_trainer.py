@@ -284,5 +284,5 @@ class A2CTrainer:
         print(f"Plots saved in {plot_dir}")
 
 if __name__ == "__main__":
-    trainer = A2CTrainer(gym_id='LunarLander-v3', total_timesteps=100000)
+    trainer = A2CTrainer(gym_id='LunarLander-v3', total_timesteps=10000000)
     trainer.train()
