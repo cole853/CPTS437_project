@@ -76,7 +76,7 @@ class Wrapper:
         obs, info = env.reset()
 
         model = Agent(env)
-        model.load_state_dict(torch.load(path, weights_only=True))
+        model.load_state_dict(torch.load(path, weights_only=False))
         model.eval()
 
         ep_reward = 0
