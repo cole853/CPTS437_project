@@ -123,6 +123,7 @@ class PPO_trainer:
             print("Samples per second:", int(self.global_step / (time.time() - start_time)))
 
         # save model, close environment, and save plots
+        os.makedirs("agents", exist_ok=True)
         torch.save(agent.state_dict(), f"agents/{run_name}.pkl")
         self.save_plots(run_name)
         env.close()
