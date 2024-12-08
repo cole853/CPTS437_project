@@ -8,11 +8,11 @@ The code for each of these algorithms can be found in their corresponding folder
 
 This project requires
 
-Python 3.7 or higher
-numpy
-pytorch
-gymnasium
-matplotlib
-pandas
-pygame
-box2d
+- Python 3.7 or higher
+- numpy
+- pytorch
+- gymnasium
+- matplotlib
+- pandas
+- pygame
+- box2d
