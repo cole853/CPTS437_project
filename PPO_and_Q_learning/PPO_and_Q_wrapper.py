@@ -64,7 +64,7 @@ class PPO_and_Q_Wrapper:
     def trainModel_PPO(self, steps):
         trainer = PPO_trainer(self.gym_id, steps)
         trainer.run()
-        sys.exit(0)
+        # sys.exit(0)
 
     # runs the trained PPO model on one simulation
     # returns the reward and steps
