@@ -208,7 +208,3 @@ class Wrapper:
         with open(log_file, mode='a') as f:
             f.write(f"{episode},{total_reward},{steps},{epsilon}\n")
         print(f"Logged Episode {episode} data to {log_file}")
-        
-        
-test = Wrapper()
-test.trainModel(100000)
