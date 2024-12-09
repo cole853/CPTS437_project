@@ -1,3 +1,5 @@
+#This file contains the base functionality for the DQN agent
+
 import gymnasium as gym
 import torch
 import torch.nn as nn
