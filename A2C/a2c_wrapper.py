@@ -7,7 +7,7 @@ from gymnasium.wrappers import RecordVideo
 from a2c_trainer import A2CTrainer
 from a2c_agent import Agent
 
-class Wrapper:
+class a2c_Wrapper:
     def __init__(self):
         pass
 
