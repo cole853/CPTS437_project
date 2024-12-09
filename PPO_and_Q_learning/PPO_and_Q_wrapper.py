@@ -173,7 +173,7 @@ class PPO_and_Q_Wrapper:
 
         env.close()
 
-        sys.exit(0)
+        # sys.exit(0)
 
     # runs the trained Q model on one simulation
     # returns the reward and steps
