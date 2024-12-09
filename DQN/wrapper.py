@@ -60,8 +60,6 @@ class Wrapper:
         self.epsilon_decay = 0.999
         self.target_update_freq = 100
     
-    def forward(self, x):
-        return self.fc(x)
 
     def trainModel(self, num_episodes=1000):
         ep_rewards = []
