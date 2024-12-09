@@ -13,7 +13,7 @@ import torch
 
 # a wrapper class for the game
 # includes functions for training the Q learning and PPO algorithms
-class Wrapper:
+class PPO_and_Q_Wrapper:
     def __init__(self):
         self.gym_id = "LunarLander-v3"
 
