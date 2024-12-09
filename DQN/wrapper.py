@@ -10,15 +10,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 class QNetwork(nn.Module):
-        def __init__(self, input_dim, output_dim):
-            super(QNetwork, self).__init__()
-            self.fc = nn.Sequential(
-                nn.Linear(input_dim, 128),
-                nn.ReLU(),
-                nn.Linear(128, 128),
-                nn.ReLU(),
-                nn.Linear(128, output_dim)
-            )
+    def __init__(self, input_dim, output_dim):
+        super(QNetwork, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, output_dim)
+        )
+        
+    def forward(self, x):
+        return self.fc(x)
 
 class Wrapper:
     def __init__(self, env_name='LunarLander-v3', run_name="dqn_agent", base_dir="."):
