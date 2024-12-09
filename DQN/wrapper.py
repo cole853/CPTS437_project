@@ -8,7 +8,21 @@ from collections import deque
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
-from dqn import QNetwork
+
+class QNetwork(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super(QNetwork, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, output_dim)
+        )
+    
+    def forward(self, x):
+        return self.fc(x)
+
 
 class Wrapper:
     def __init__(self, env_name='LunarLander-v3', run_name="dqn_agent", base_dir="."):
@@ -48,67 +62,76 @@ class Wrapper:
         self.target_update_freq = 100
     
 
-    def trainModel(self, num_episodes=1000):
+    def trainModel(self, max_steps=10000):
         ep_rewards = []
         steps_per_ep = []
-        
-        for episode in range(num_episodes):
+        actual_episodes = 0  # Track actual episodes run
+        total_steps = 0  # Track total training steps globally
+
+        while total_steps < max_steps:
             state = self.env.reset()[0]
             total_reward = 0
             steps = 0
-            
-            for t in range(1000):
+            actual_episodes += 1  # Increment actual episode count
+
+            for t in range(1000):  # Max steps per episode
                 if random.random() < self.epsilon:
                     action = self.env.action_space.sample()
                 else:
                     state_tensor = torch.FloatTensor(state).unsqueeze(0)
                     action = self.q_net(state_tensor).argmax().item()
-                
+
                 next_state, reward, done, _, _ = self.env.step(action)
                 self.replay_buffer.append((state, action, reward, next_state, done))
                 state = next_state
                 total_reward += reward
                 steps += 1
-                
-                if done:
+                total_steps += 1  # Increment global step count
+
+                if done or total_steps >= max_steps:
                     break
-                
+
                 if len(self.replay_buffer) >= self.batch_size:
                     batch = random.sample(self.replay_buffer, self.batch_size)
                     states, actions, rewards, next_states, dones = zip(*batch)
-                    
+
                     states = torch.FloatTensor(np.array(states))
                     actions = torch.LongTensor(actions)
                     rewards = torch.FloatTensor(rewards)
                     next_states = torch.FloatTensor(np.array(next_states))
                     dones = torch.FloatTensor(dones)
-                    
+
                     q_values = self.q_net(states).gather(1, actions.unsqueeze(1)).squeeze()
                     next_q_values = self.target_net(next_states).max(1)[0]
                     target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
-                    
+
                     loss = self.loss_fn(q_values, target_q_values.detach())
                     self.optimizer.zero_grad()
                     loss.backward()
                     self.optimizer.step()
-            
+
             ep_rewards.append(total_reward)
             steps_per_ep.append(steps)
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-            
-            self.log_episode_data(episode + 1, total_reward, steps, self.epsilon)
-            
-            if (episode + 1) % self.target_update_freq == 0:
+
+            self.log_episode_data(actual_episodes, total_reward, steps, self.epsilon)
+
+            if actual_episodes % self.target_update_freq == 0:
                 self.target_net.load_state_dict(self.q_net.state_dict())
-        
+
+            # Check if total steps exceed the maximum allowed steps
+            if total_steps >= max_steps:
+                print(f"Reached maximum training steps: {total_steps}. Stopping training.")
+                break
+
         self.save_plots(ep_rewards, steps_per_ep)
-        print("Training complete.")
-        
-        # Save the model and optimizer
+        print(f"Training complete. Total episodes run: {actual_episodes}, Total steps: {total_steps}")
         self.save_model()
 
+
+
     def save_model(self):
-        agent_dir = os.path.join(self.base_dir, "agent")
+        agent_dir = os.path.join(self.base_dir, "DQN", "agents")  # Corrected to "agents" 
         os.makedirs(agent_dir, exist_ok=True)
         model_path = os.path.join(agent_dir, "dqn_model.pth")
         optimizer_path = os.path.join(agent_dir, "optimizer.pth")
