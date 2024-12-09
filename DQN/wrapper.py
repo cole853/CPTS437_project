@@ -60,7 +60,7 @@ class Wrapper:
     def forward(self, x):
         return self.fc(x)
 
-    def train_model(self, num_episodes=1000):
+    def trainModel(self, num_episodes=1000):
         ep_rewards = []
         steps_per_ep = []
         
@@ -129,7 +129,7 @@ class Wrapper:
         print(f"Model saved to {model_path}")
         print(f"Optimizer saved to {optimizer_path}")
 
-    def test_model(self, model_path):
+    def testModel(self, model_path):
         self.q_net.load_state_dict(torch.load(model_path))
         print(f"Model loaded from {model_path}")
         state = self.env.reset()[0]
