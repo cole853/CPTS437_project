@@ -1,3 +1,6 @@
+# This Wrapper file is uses the functionallity established in dqn.py in a wrapper format.
+# This allows it to be used in the collab notebook.
+
 import gymnasium as gym
 import torch
 import torch.nn as nn
@@ -9,21 +12,22 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
+#Initialize neural network object
 class QNetwork(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(QNetwork, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU(),
-            nn.Linear(128, output_dim)
+            nn.Linear(input_dim, 128), # Input layer
+            nn.ReLU(), # ReLU activation
+            nn.Linear(128, 128), # Two hidden layers with 128 nuerons each
+            nn.ReLU(), # ReLU activation
+            nn.Linear(128, output_dim) # Output layer
         )
     
     def forward(self, x):
         return self.fc(x)
 
-
+# Main wrapper class
 class Wrapper:
     def __init__(self, env_name='LunarLander-v3', run_name="dqn_agent", base_dir="."):
         self.env_name = env_name
@@ -62,6 +66,7 @@ class Wrapper:
         self.target_update_freq = 100
     
 
+    # Train model function. Ends 
     def trainModel(self, max_steps=10000):
         ep_rewards = []
         steps_per_ep = []
@@ -207,4 +212,4 @@ class Wrapper:
         # Append the episode data
         with open(log_file, mode='a') as f:
             f.write(f"{episode},{total_reward},{steps},{epsilon}\n")
-        print(f"Logged Episode {episode} data to {log_file}")
+        print(f"Episode {episode} -- Total Steps: {steps} -- Reward: {total_reward}")

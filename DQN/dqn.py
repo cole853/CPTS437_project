@@ -5,7 +5,6 @@ import torch.optim as optim
 import numpy as np
 import random
 from collections import deque
-import pickle
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -17,42 +16,15 @@ class QNetwork(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(QNetwork, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, output_dim)
+            nn.Linear(input_dim, 128), # Input layer
+            nn.ReLU(), # ReLU activation
+            nn.Linear(128, 128), # Two hidden layers with 128 nuerons each
+            nn.ReLU(), # ReLU activation
+            nn.Linear(128, output_dim) # Output layer
         )
     
     def forward(self, x):
         return self.fc(x)
-
-# Save training data
-def save_training_data(model, optimizer, replay_buffer, episode, filepath=os.path.join(base_dir, "agents", "dqn_checkpoint.pth")):
-    checkpoint = {
-        'model_state': model.state_dict(),
-        'optimizer_state': optimizer.state_dict(),
-        'replay_buffer': list(replay_buffer),
-        'episode': episode
-    }
-    with open(filepath, 'wb') as f:
-        pickle.dump(checkpoint, f)
-    print("Checkpoint saved successfully!")
-
-# Load training data
-def load_training_data(model, optimizer, filepath="agents/dqn_checkpoint.pth"):
-    if os.path.exists(filepath):
-        with open(filepath, 'rb') as f:
-            checkpoint = pickle.load(f)
-        model.load_state_dict(checkpoint['model_state'])
-        optimizer.load_state_dict(checkpoint['optimizer_state'])
-        replay_buffer = deque(checkpoint['replay_buffer'], maxlen=50000)
-        start_episode = checkpoint['episode']
-        print("Checkpoint loaded successfully!")
-        return replay_buffer, start_episode
-    else:
-        print("No checkpoint found. Starting fresh training.")
-        return deque(maxlen=50000), 0
 
 # Save plots
 def save_plots(ep_rewards, steps_per_ep, run_name):
@@ -61,7 +33,7 @@ def save_plots(ep_rewards, steps_per_ep, run_name):
 
     # Plot for Episode Rewards
     smoothed_rewards = pd.Series(ep_rewards).rolling(window=100, center=True).mean()
-
+    
     plt.figure(figsize=(10, 6))
     plt.plot(ep_rewards, label="Episode Rewards", marker="o")
     plt.plot(smoothed_rewards, label="Smoothed Rewards (Moving Average 100)", linestyle="--")
@@ -123,15 +95,18 @@ env = gym.wrappers.RecordVideo(env, os.path.join(base_dir, "videos", run_name))
 state_dim = env.observation_space.shape[0]
 action_dim = env.action_space.n
 
+# Main model
 q_net = QNetwork(state_dim, action_dim)
 target_net = QNetwork(state_dim, action_dim)
+
+# Target Model
 target_net.load_state_dict(q_net.state_dict())
 
 optimizer = optim.Adam(q_net.parameters(), lr=1e-3)
 loss_fn = nn.MSELoss()
 
-# Load existing training data if available
-replay_buffer, start_episode = load_training_data(q_net, optimizer)
+# Initializing Replay Buffer
+replay_buffer = deque(maxlen=50000)
 
 gamma = 0.99
 batch_size = 128
@@ -144,18 +119,22 @@ ep_rewards = []
 steps_per_ep = []
 
 # Training loop
-for episode in range(start_episode, num_episodes):
+for episode in range(num_episodes):
     state = env.reset()[0]
     total_reward = 0
     steps = 0
     
+    # For each step
     for t in range(1000):
+        
+        # Select action based on epsilon
         if random.random() < epsilon:
             action = env.action_space.sample()
         else:
             state_tensor = torch.FloatTensor(state).unsqueeze(0)
             action = q_net(state_tensor).argmax().item()
         
+        # Collect feedback
         next_state, reward, done, _, _ = env.step(action)
         replay_buffer.append((state, action, reward, next_state, done))
         
@@ -166,6 +145,7 @@ for episode in range(start_episode, num_episodes):
         if done:
             break
         
+        # Mangage replay buffer
         if len(replay_buffer) >= batch_size:
             batch = random.sample(replay_buffer, batch_size)
             states, actions, rewards, next_states, dones = zip(*batch)
@@ -195,12 +175,23 @@ for episode in range(start_episode, num_episodes):
     
     if (episode + 1) % target_update_freq == 0:
         target_net.load_state_dict(q_net.state_dict())
-    
-    # Save progress every 50 episodes
-    if (episode + 1) % 50 == 0:
-        save_training_data(q_net, optimizer, replay_buffer, episode + 1)
 
-# Save final training data and plots
-save_training_data(q_net, optimizer, replay_buffer, num_episodes)
+# Save plots
 save_plots(ep_rewards, steps_per_ep, run_name)
 print("Training complete. Videos, plots, and logs saved!")
+
+# Define the folder paths
+agent_dir = os.path.join(base_dir, "agents")
+os.makedirs(agent_dir, exist_ok=True)
+
+# File paths for model and optimizer states
+model_path = os.path.join(agent_dir, "dqn_model.pth")
+optimizer_path = os.path.join(agent_dir, "optimizer.pth")
+
+# Save model state
+torch.save(q_net.state_dict(), model_path)
+print(f"Model state saved to {model_path}")
+
+# Save optimizer state
+torch.save(optimizer.state_dict(), optimizer_path)
+print(f"Optimizer state saved to {optimizer_path}")
